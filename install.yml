@@ -1,0 +1,64 @@
+---
+- name: Setup NGINX and deploy Node app
+  hosts: all
+  become: yes
+
+  vars:
+    packages:
+      - docker.io
+      - nginx
+
+  tasks:
+    - name: Install packages
+      apt:
+        name: "{{ item }}"
+        state: present
+        update_cache: yes
+      loop: "{{ packages }}"
+
+    - name: start docker and nginx service
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - docker
+        - nginx
+
+    - name: Copy Nginx configuration file
+      copy:
+        src: nginx.conf
+        dest: /etc/nginx/sites-available/default
+      notify: Restart Nginx
+
+    - name: Remove default Nginx config
+      command: rm /etc/nginx/sites-enabled/default
+      ignore_errors: yes  
+
+    - name: Create symlink for Nginx config
+      file:
+        src: /etc/nginx/sites-available/default
+        dest: /etc/nginx/sites-enabled/default
+        state: link
+
+    - name: Pull Node.js app Docker image
+      docker_image:
+        name: jamgadeshivam/node-app  
+        tag: latest
+        source: pull
+
+    - name: Run Node.js app in Docker container
+      docker_container:
+        name: nodejs_app
+        image: jamgadeshivam/node-app:latest 
+        state: started
+        restart_policy: always
+        ports:
+          - "3000:3000"  # Map host port 3000 to container port 3000
+      
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+
